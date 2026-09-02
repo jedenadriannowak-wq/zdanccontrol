@@ -17,6 +17,16 @@
         </header>
 
         <main>
+            <div class="agents-section">
+                <div class="section-header">
+                    <h2>Dostępne komputery</h2>
+                    <button id="refresh-agents" class="btn btn-secondary">Odśwież</button>
+                </div>
+                <div id="agents-list" class="agents-list">
+                    <p class="text-muted">Ładowanie listy agentów...</p>
+                </div>
+            </div>
+
             <div class="terminal-section">
                 <div class="terminal-header">
                     <h2>Terminal</h2>
@@ -29,16 +39,16 @@
                     <div id="terminal" class="terminal"></div>
                     <div class="terminal-input">
                         <span class="prompt">$</span>
-                        <input type="text" id="command-input" placeholder="Wpisz komendę..." autocomplete="off">
+                        <input type="text" id="command-input" placeholder="Wybierz agenta i wpisz komendę..." autocomplete="off" disabled>
                     </div>
                 </div>
             </div>
 
             <div class="info-section">
                 <div class="info-card">
-                    <h3>System Information</h3>
+                    <h3>Informacje o komputerze</h3>
                     <div id="system-info">
-                        <p>Kliknij "Połącz" aby pobrać informacje o systemie</p>
+                        <p>Wybierz agenta z listy aby zobaczyć informacje</p>
                     </div>
                 </div>
 

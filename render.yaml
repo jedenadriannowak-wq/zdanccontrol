@@ -7,9 +7,9 @@ services:
     envVars:
       - key: PORT
         value: 3000
-      - key: PYTHON_API_URL
-        # URL do Python API hostowanego na Windows VPS/serwerze
-        # Dla produkcji zmień na rzeczywisty URL Twojego Python API
+      - key: AGENT_API_URL
+        # URL do Agent API hostowanego na Windows VPS/serwerze
+        # Dla produkcji zmień na rzeczywisty URL Twojego agenta
         value: http://localhost:8000
     plan: free
     region: oregon

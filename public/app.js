@@ -1,8 +1,10 @@
 // Globalne zmienne
 let socket;
 let isConnected = false;
+let selectedAgent = null;
 let commandHistory = [];
 let historyIndex = -1;
+let commandIdCounter = 0;
 
 // Elementy DOM
 const terminal = document.getElementById('terminal');
@@ -12,6 +14,7 @@ const clearBtn = document.getElementById('clear-terminal');
 const connectionStatus = document.getElementById('connection-status');
 const apiStatus = document.getElementById('api-status');
 const systemInfo = document.getElementById('system-info');
+const agentsList = document.getElementById('agents-list');
 
 // Inicjalizacja
 document.addEventListener('DOMContentLoaded', () => {
@@ -26,6 +29,9 @@ function initializeEventListeners() {
     // Przycisk czyszczenia terminala
     clearBtn.addEventListener('click', clearTerminal);
     
+    // Przycisk odświeżania listy agentów
+    document.getElementById('refresh-agents').addEventListener('click', refreshAgentsList);
+    
     // Obsługa inputu komend
     commandInput.addEventListener('keydown', handleCommandInput);
     
@@ -33,10 +39,12 @@ function initializeEventListeners() {
     document.querySelectorAll('.action-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             const command = btn.dataset.command;
-            if (command && isConnected) {
+            if (command && isConnected && selectedAgent) {
                 executeCommand(command);
             } else if (!isConnected) {
                 addTerminalOutput('Najpierw połącz się z serwerem', 'error');
+            } else if (!selectedAgent) {
+                addTerminalOutput('Najpierw wybierz agenta z listy', 'error');
             }
         });
     });
@@ -54,6 +62,9 @@ function initializeSocket() {
         isConnected = true;
         updateConnectionStatus(true);
         addTerminalOutput('Połączono z serwerem WebSocket', 'success');
+        
+        // Pobierz listę agentów
+        socket.emit('client_connect');
     });
     
     socket.on('disconnect', () => {
@@ -63,17 +74,45 @@ function initializeSocket() {
         addTerminalOutput('Rozłączono z serwerem WebSocket', 'error');
     });
     
-    socket.on('terminal-output', (data) => {
+    // Otrzymaj listę agentów
+    socket.on('agents_list', (agents) => {
+        displayAgentsList(agents);
+    });
+    
+    // Nowy agent zarejestrowany
+    socket.on('agent_registered', (agent) => {
+        addTerminalOutput(`Nowy agent: ${agent.hostname} (${agent.local_ip})`, 'success');
+        refreshAgentsList();
+    });
+    
+    // Agent aktualizowany
+    socket.on('agent_updated', (agent) => {
+        updateAgentInList(agent);
+    });
+    
+    // Agent wyrejestrowany
+    socket.on('agent_unregistered', (data) => {
+        addTerminalOutput(`Agent rozłączony: ${data.agent_id}`, 'error');
+        removeAgentFromList(data.agent_id);
+    });
+    
+    // Agent wybrany
+    socket.on('agent_selected', (agent) => {
+        selectedAgent = agent;
+        addTerminalOutput(`Wybrano agenta: ${agent.hostname} (${agent.local_ip})`, 'success');
+        updateSystemInfo(agent);
+        commandInput.disabled = false;
+    });
+    
+    // Wynik komendy
+    socket.on('command_result', (data) => {
         displayCommandOutput(data);
     });
     
-    socket.on('status-update', (data) => {
-        updateSystemInfo(data);
-    });
-    
+    // Błędy
     socket.on('error', (error) => {
         console.error('Socket error:', error);
-        addTerminalOutput(`Błąd socket: ${error}`, 'error');
+        addTerminalOutput(`Błąd socket: ${error.message || error}`, 'error');
     });
 }
 
@@ -88,13 +127,6 @@ function toggleConnection() {
         connectBtn.textContent = 'Rozłącz';
         connectBtn.classList.remove('btn-primary');
         connectBtn.classList.add('btn-danger');
-        
-        // Pobierz status po połączeniu
-        setTimeout(() => {
-            if (isConnected) {
-                socket.emit('get-status');
-            }
-        }, 1000);
     }
 }
 
@@ -103,23 +135,96 @@ function updateConnectionStatus(connected) {
         connectionStatus.textContent = 'Połączony';
         connectionStatus.classList.remove('disconnected', 'unknown');
         connectionStatus.classList.add('connected');
-        commandInput.disabled = false;
     } else {
         connectionStatus.textContent = 'Rozłączony';
         connectionStatus.classList.remove('connected', 'unknown');
         connectionStatus.classList.add('disconnected');
         commandInput.disabled = true;
+        selectedAgent = null;
+    }
+}
+
+function displayAgentsList(agents) {
+    agentsList.innerHTML = '';
+    
+    if (agents.length === 0) {
+        agentsList.innerHTML = '<p class="text-muted">Brak dostępnych agentów</p>';
+        return;
+    }
+    
+    agents.forEach(agent => {
+        const agentCard = document.createElement('div');
+        agentCard.className = 'agent-card';
+        agentCard.dataset.agentId = agent.agent_id;
+        
+        agentCard.innerHTML = `
+            <div class="agent-header">
+                <h4>${agent.hostname}</h4>
+                <span class="status-badge ${agent.status === 'online' ? 'connected' : 'disconnected'}">${agent.status}</span>
+            </div>
+            <div class="agent-details">
+                <p><strong>IP:</strong> ${agent.local_ip}</p>
+                <p><strong>Platforma:</strong> ${agent.platform}</p>
+                <p><strong>Agent ID:</strong> ${agent.agent_id.substring(0, 8)}...</p>
+                <p><strong>Ostatni heartbeat:</strong> ${new Date(agent.last_heartbeat).toLocaleString()}</p>
+            </div>
+            <button class="btn btn-primary select-agent-btn" data-agent-id="${agent.agent_id}">
+                Wybierz
+            </button>
+        `;
+        
+        // Obsługa kliknięcia
+        agentCard.querySelector('.select-agent-btn').addEventListener('click', () => {
+            selectAgent(agent.agent_id);
+        });
+        
+        agentsList.appendChild(agentCard);
+    });
+}
+
+function selectAgent(agentId) {
+    socket.emit('select_agent', agentId);
+}
+
+function refreshAgentsList() {
+    socket.emit('client_connect');
+}
+
+function updateAgentInList(agent) {
+    const agentCard = agentsList.querySelector(`[data-agent-id="${agent.agent_id}"]`);
+    if (agentCard) {
+        const statusBadge = agentCard.querySelector('.status-badge');
+        statusBadge.className = `status-badge ${agent.status === 'online' ? 'connected' : 'disconnected'}`;
+        statusBadge.textContent = agent.status;
+        
+        const lastHeartbeat = agentCard.querySelector('.agent-details p:last-child');
+        lastHeartbeat.innerHTML = `<strong>Ostatni heartbeat:</strong> ${new Date(agent.last_heartbeat).toLocaleString()}`;
+    }
+}
+
+function removeAgentFromList(agentId) {
+    const agentCard = agentsList.querySelector(`[data-agent-id="${agentId}"]`);
+    if (agentCard) {
+        agentCard.remove();
+        
+        if (selectedAgent && selectedAgent.agent_id === agentId) {
+            selectedAgent = null;
+            commandInput.disabled = true;
+            addTerminalOutput('Wybrany agent został rozłączony', 'error');
+        }
     }
 }
 
 function handleCommandInput(event) {
     if (event.key === 'Enter') {
         const command = commandInput.value.trim();
-        if (command && isConnected) {
+        if (command && isConnected && selectedAgent) {
             executeCommand(command);
             commandInput.value = '';
         } else if (!isConnected) {
             addTerminalOutput('Najpierw połącz się z serwerem', 'error');
+        } else if (!selectedAgent) {
+            addTerminalOutput('Najpierw wybierz agenta z listy', 'error');
         }
     } else if (event.key === 'ArrowUp') {
         navigateHistory(-1);
@@ -129,8 +234,8 @@ function handleCommandInput(event) {
 }
 
 function executeCommand(command) {
-    if (!isConnected) {
-        addTerminalOutput('Nie jesteś połączony z serwerem', 'error');
+    if (!isConnected || !selectedAgent) {
+        addTerminalOutput('Nie jesteś połączony lub nie wybrano agenta', 'error');
         return;
     }
     
@@ -142,7 +247,12 @@ function executeCommand(command) {
     addTerminalOutput(`$ ${command}`, 'command');
     
     // Wyślij komendę przez WebSocket
-    socket.emit('terminal-command', command);
+    const commandId = `cmd_${commandIdCounter++}`;
+    socket.emit('execute_command', {
+        agent_id: selectedAgent.agent_id,
+        command: command,
+        command_id: commandId
+    });
 }
 
 function displayCommandOutput(data) {
@@ -163,10 +273,10 @@ function displayCommandOutput(data) {
         commandDiv.appendChild(errorDiv);
     }
     
-    if (data.returnCode !== undefined) {
+    if (data.returncode !== undefined) {
         const returnCodeDiv = document.createElement('div');
-        returnCodeDiv.className = data.returnCode === 0 ? 'terminal-success' : 'terminal-error';
-        returnCodeDiv.textContent = `Return code: ${data.returnCode}`;
+        returnCodeDiv.className = data.returncode === 0 ? 'terminal-success' : 'terminal-error';
+        returnCodeDiv.textContent = `Return code: ${data.returncode}`;
         commandDiv.appendChild(returnCodeDiv);
     }
     
@@ -219,12 +329,12 @@ function navigateHistory(direction) {
     commandInput.value = commandHistory[historyIndex];
 }
 
-function updateSystemInfo(data) {
-    if (data.error) {
-        apiStatus.textContent = 'API: Błąd';
+function updateSystemInfo(agent) {
+    if (!agent) {
+        apiStatus.textContent = 'API: Nie wybrano agenta';
         apiStatus.classList.remove('unknown', 'connected');
         apiStatus.classList.add('disconnected');
-        systemInfo.innerHTML = `<p class="terminal-error">${data.error}</p>`;
+        systemInfo.innerHTML = '<p>Wybierz agenta z listy aby zobaczyć informacje</p>';
         return;
     }
     
@@ -233,15 +343,22 @@ function updateSystemInfo(data) {
     apiStatus.classList.add('connected');
     
     systemInfo.innerHTML = `
-        <p><strong>Status:</strong> ${data.status}</p>
-        <p><strong>Adres IP:</strong> ${data.local_ip}</p>
-        <p><strong>Platforma:</strong> ${data.platform}</p>
-        <p><strong>Reguła Firewall:</strong> ${data.firewall_rule}</p>
-        <p><strong>Porty:</strong> ${data.ports.join(', ')}</p>
+        <p><strong>Hostname:</strong> ${agent.hostname}</p>
+        <p><strong>Adres IP:</strong> ${agent.local_ip}</p>
+        <p><strong>Platforma:</strong> ${agent.platform} ${agent.platform_release || ''}</p>
+        <p><strong>Agent ID:</strong> ${agent.agent_id}</p>
+        <p><strong>Wersja agenta:</strong> ${agent.agent_version}</p>
+        <p><strong>Status:</strong> ${agent.status}</p>
+        <p><strong>Ostatni heartbeat:</strong> ${new Date(agent.last_heartbeat).toLocaleString()}</p>
     `;
 }
 
 async function managePort(action) {
+    if (!selectedAgent) {
+        addTerminalOutput('Najpierw wybierz agenta z listy', 'error');
+        return;
+    }
+    
     const portNumber = document.getElementById('port-number').value;
     
     if (!portNumber) {
@@ -256,7 +373,7 @@ async function managePort(action) {
     }
     
     try {
-        const endpoint = action === 'open' ? '/api/ports/open' : '/api/ports/close';
+        const endpoint = action === 'open' ? `/api/agents/${selectedAgent.agent_id}/ports/open` : `/api/agents/${selectedAgent.agent_id}/ports/close`;
         const response = await fetch(endpoint, {
             method: 'POST',
             headers: {
@@ -268,7 +385,7 @@ async function managePort(action) {
         const data = await response.json();
         
         if (response.ok) {
-            addTerminalOutput(`Port ${port} został ${action === 'open' ? 'otwarty' : 'zamknięty'}`, 'success');
+            addTerminalOutput(`Port ${port} został ${action === 'open' ? 'otwarty' : 'zamknięty'} na ${selectedAgent.hostname}`, 'success');
         } else {
             addTerminalOutput(`Błąd: ${data.error}`, 'error');
         }
