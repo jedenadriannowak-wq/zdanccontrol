@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Remote Control - Web Interface</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🖥️ Remote Control Interface</h1>
+            <div class="status-bar">
+                <span id="connection-status" class="status-badge disconnected">Rozłączony</span>
+                <span id="api-status" class="status-badge unknown">API: Nieznany</span>
+            </div>
+        </header>
+
+        <main>
+            <div class="terminal-section">
+                <div class="terminal-header">
+                    <h2>Terminal</h2>
+                    <div class="terminal-controls">
+                        <button id="clear-terminal" class="btn btn-secondary">Wyczyść</button>
+                        <button id="connect-btn" class="btn btn-primary">Połącz</button>
+                    </div>
+                </div>
+                <div class="terminal-container">
+                    <div id="terminal" class="terminal"></div>
+                    <div class="terminal-input">
+                        <span class="prompt">$</span>
+                        <input type="text" id="command-input" placeholder="Wpisz komendę..." autocomplete="off">
+                    </div>
+                </div>
+            </div>
+
+            <div class="info-section">
+                <div class="info-card">
+                    <h3>System Information</h3>
+                    <div id="system-info">
+                        <p>Kliknij "Połącz" aby pobrać informacje o systemie</p>
+                    </div>
+                </div>
+
+                <div class="info-card">
+                    <h3>Szybkie akcje</h3>
+                    <div class="quick-actions">
+                        <button class="action-btn" data-command="dir">Wylistuj pliki</button>
+                        <button class="action-btn" data-command="ipconfig">Konfiguracja sieci</button>
+                        <button class="action-btn" data-command="systeminfo">Informacje systemu</button>
+                        <button class="action-btn" data-command="tasklist">Lista procesów</button>
+                    </div>
+                </div>
+
+                <div class="info-card">
+                    <h3>Zarządzanie portami</h3>
+                    <div class="port-management">
+                        <div class="port-input">
+                            <input type="number" id="port-number" placeholder="Numer portu" min="1" max="65535">
+                            <button id="open-port" class="btn btn-success">Otwórz</button>
+                            <button id="close-port" class="btn btn-danger">Zamknij</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>Remote Control Application - Homelab & Cybersecurity</p>
+        </footer>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

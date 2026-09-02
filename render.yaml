@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: remote-control-web
+    env: node
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: PYTHON_API_URL
+        # URL do Python API hostowanego na Windows VPS/serwerze
+        # Dla produkcji zmień na rzeczywisty URL Twojego Python API
+        value: http://localhost:8000
+    plan: free
+    region: oregon
