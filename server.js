@@ -21,6 +21,8 @@ const RENDER_DOMAIN = 'zdanccontrol.onrender.com';
 // Storage dla agentów
 const agents = new Map(); // agent_id -> agent_info
 const agentSockets = new Map(); // agent_id -> socket
+const pendingCommands = new Map(); // agent_id -> [ {command_id, command, created_at} ]
+const processedCommands = new Set(); // command_id (aby nie przetwarzać dwukrotnie wyniku)
 
 // Middleware
 app.use(cors());
@@ -112,7 +114,59 @@ app.get('/api/agents/:agent_id', (req, res) => {
   }
 });
 
-// API proxy - przekazuje żądania do konkretnego agenta
+// ENDPOINT DLA POLLINGU - Pobierz oczekujące komendy dla agenta (HTTP polling)
+app.get('/api/agents/:agent_id/commands', (req, res) => {
+  try {
+    const agentId = req.params.agent_id;
+    const agent = agents.get(agentId);
+
+    if (!agent) {
+      return res.status(404).json({ error: 'Agent not found', commands: [] });
+    }
+
+    agent.last_heartbeat = new Date().toISOString();
+    agent.status = 'online';
+
+    const commands = pendingCommands.get(agentId) || [];
+    pendingCommands.set(agentId, []);
+
+    console.log(`[HTTP Polling] Agent ${agentId} pobrał ${commands.length} komend`);
+    res.json({ commands, success: true });
+  } catch (error) {
+    console.error('Błąd pobierania komend:', error);
+    res.status(500).json({ error: 'Failed to get commands', commands: [] });
+  }
+});
+
+// ENDPOINT DLA POLLINGU - Wyślij wynik komendy
+app.post('/api/agents/:agent_id/commands/:command_id/result', (req, res) => {
+  try {
+    const { agent_id, command_id } = req.params;
+    const result = req.body;
+
+    if (processedCommands.has(command_id)) {
+      return res.json({ success: true, duplicate: true });
+    }
+    processedCommands.add(command_id);
+
+    console.log(`[HTTP Polling] Wynik komendy ${command_id} od agenta ${agent_id}`);
+
+    io.emit('command_result', {
+      command_id,
+      success: result.success,
+      output: result.output || null,
+      error: result.error || null,
+      returncode: result.returncode
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Błąd zapisu wyniku komendy:', error);
+    res.status(500).json({ error: 'Failed to store result' });
+  }
+});
+
+// API proxy - przekazuje żądania do konkretnego agenta (tylko jeśli nie ma własnego handlera)
 app.all('/api/agents/:agent_id/*', async (req, res) => {
   try {
     const agentId = req.params.agent_id;
@@ -122,8 +176,11 @@ app.all('/api/agents/:agent_id/*', async (req, res) => {
       return res.status(404).json({ error: 'Agent not available' });
     }
     
-    // Tutaj normalnie przekierowalibyśmy do agenta, ale w tej wersji
-    // używamy lokalnego AGENT_API_URL dla testów
+    const agentSocket = agentSockets.get(agentId);
+    if (agentSocket) {
+      return res.status(400).json({ error: 'Agent połączony przez WebSocket - użyj socket.io' });
+    }
+    
     const targetUrl = `${AGENT_API_URL}${req.url.replace(`/api/agents/${agent_id}`, '/api/agent')}`;
     
     console.log(`Proxying ${req.method} ${req.url} to ${targetUrl}`);
@@ -138,11 +195,10 @@ app.all('/api/agents/:agent_id/*', async (req, res) => {
     
     res.status(response.status).json(response.data);
   } catch (error) {
-    console.error('Proxy error:', error.message);
     if (error.response) {
       res.status(error.response.status).json(error.response.data);
     } else {
-      res.status(500).json({ error: 'Connection to agent failed' });
+      res.status(500).json({ error: 'Connection to agent failed - ' + error.message });
     }
   }
 });
@@ -230,16 +286,22 @@ io.on('connection', (socket) => {
   // Komenda do agenta
   socket.on('execute_command', (data) => {
     const { agent_id, command, command_id } = data;
-    console.log(`Execute command on ${agent_id}: ${command}`);
-    
+    console.log(`Execute command on ${agent_id}: ${command} (ID: ${command_id})`);
+
     const agentSocket = agentSockets.get(agent_id);
     if (agentSocket) {
-      agentSocket.emit('execute_command', {
-        command,
-        command_id
-      });
+      // Agent połączony przez WebSocket - wyślij bezpośrednio
+      agentSocket.emit('execute_command', { command, command_id });
+      socket.emit('command_queued', { command_id, transport: 'websocket' });
+    } else if (agents.has(agent_id)) {
+      // Agent połączony przez HTTP polling - dodaj do kolejki
+      const queue = pendingCommands.get(agent_id) || [];
+      queue.push({ command_id, command, created_at: new Date().toISOString() });
+      pendingCommands.set(agent_id, queue);
+      console.log(`[HTTP Queue] Dodano komendę ${command_id} do kolejki agenta ${agent_id}. Oczekujących: ${queue.length}`);
+      socket.emit('command_queued', { command_id, transport: 'http_polling' });
     } else {
-      socket.emit('error', { message: 'Agent not connected' });
+      socket.emit('error', { message: 'Agent not connected or not found' });
     }
   });
   
@@ -269,6 +331,27 @@ app.get('/health', (req, res) => {
     total_agents: agents.size
   });
 });
+
+// Auto-offline detector: oznacz agenta HTTP jako offline jesli >2 min bez aktywnosci
+setInterval(() => {
+  const now = Date.now();
+  const OFFLINE_THRESHOLD_MS = 2 * 60 * 1000; // 2 minuty
+  let changed = 0;
+  for (const [agentId, agent] of agents.entries()) {
+    if (agent.status === 'online' && !agentSockets.has(agentId)) {
+      const lastSeen = new Date(agent.last_heartbeat).getTime();
+      if (now - lastSeen > OFFLINE_THRESHOLD_MS) {
+        agent.status = 'offline';
+        agents.set(agentId, agent);
+        io.emit('agent_unregistered', { agent_id: agentId });
+        changed++;
+      }
+    }
+  }
+  if (changed > 0) {
+    console.log(`[Watchdog] Oznaczono ${changed} nieaktywnych agentow HTTP jako offline`);
+  }
+}, 30 * 1000); // Sprawdzaj co 30 sekund
 
 // Start server
 server.listen(PORT, () => {
