@@ -300,12 +300,42 @@ function createAgentCard(agent) {
   const statusClass = agent.status === 'online' ? 'status-online' : 'status-offline';
   const statusText = agent.status === 'online' ? 'Online' : 'Offline';
   
+  const transport = agent.transport || 'unknown';
+  let transportBadge = '';
+  let transportTitle = '';
+  if (transport === 'websocket') {
+    transportBadge = '<div class="badge badge-ws" title="Połączenie WebSocket (natychmiastowe)">WS</div>';
+    transportTitle = 'WebSocket';
+  } else if (transport === 'http') {
+    transportBadge = '<div class="badge badge-http" title="Połączenie HTTP Polling (do 5s opóźnienia)">HTTP</div>';
+    transportTitle = 'HTTP Polling';
+  } else {
+    transportBadge = '<div class="badge badge-unknown" title="Nieznany typ połączenia">?</div>';
+    transportTitle = 'Nieznany';
+  }
+  
+  const agentType = agent.agent_type || '';
+  const agentVer = agent.agent_version ? `v${agent.agent_version}` : '';
+  const extraInfo = [agentType, agentVer].filter(Boolean).join(' ') || '';
+  
   card.innerHTML = `
     <div class="agent-card-header">
-      <div class="agent-name">${agent.hostname}</div>
+      <div class="agent-name-row">
+        <div class="agent-name">${agent.hostname}</div>
+        ${transportBadge}
+      </div>
       <div class="agent-status ${statusClass}">${statusText}</div>
     </div>
     <div class="agent-details">
+      ${extraInfo ? `
+      <div class="agent-detail">
+        <span class="agent-detail-label">Agent:</span>
+        <span>${extraInfo}</span>
+      </div>` : ''}
+      <div class="agent-detail">
+        <span class="agent-detail-label">Transport:</span>
+        <span>${transportTitle}</span>
+      </div>
       <div class="agent-detail">
         <span class="agent-detail-label">IP:</span>
         <span>${agent.local_ip}</span>

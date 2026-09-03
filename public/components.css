@@ -217,10 +217,44 @@
   margin-bottom: var(--space-3);
 }
 
+.agent-name-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 .agent-name {
   font-size: var(--text-sm);
   font-weight: var(--font-weight-semibold);
   color: var(--text-primary);
+}
+
+/* Transport badges (WS / HTTP) */
+.badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: var(--radius-full);
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  user-select: none;
+}
+
+.badge-ws {
+  background: var(--success-500);
+  color: white;
+  box-shadow: 0 1px 2px rgba(16, 185, 129, 0.3);
+}
+
+.badge-http {
+  background: var(--warning-500);
+  color: white;
+  box-shadow: 0 1px 2px rgba(245, 158, 11, 0.3);
+}
+
+.badge-unknown {
+  background: var(--border-color);
+  color: var(--text-secondary);
 }
 
 .agent-status {

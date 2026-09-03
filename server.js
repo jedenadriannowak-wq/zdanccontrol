@@ -35,11 +35,12 @@ app.post('/api/agents/register', (req, res) => {
     const agentInfo = req.body;
     const agentId = agentInfo.agent_id;
     
-    console.log(`Rejestracja agenta: ${agentId} (${agentInfo.hostname})`);
+    console.log(`Rejestracja agenta (HTTP): ${agentId} (${agentInfo.hostname})`);
     
     // Zapisz agenta
     agents.set(agentId, {
       ...agentInfo,
+      transport: 'http',
       registered_at: new Date().toISOString(),
       last_heartbeat: new Date().toISOString(),
       status: 'online'
@@ -64,6 +65,8 @@ app.post('/api/agents/heartbeat', (req, res) => {
       const agent = agents.get(agentId);
       agent.last_heartbeat = new Date().toISOString();
       agent.status = 'online';
+      agent.transport = 'http';
+      Object.assign(agent, agentInfo);
       agents.set(agentId, agent);
       
       // Powiadom klientów o aktualizacji
@@ -210,13 +213,14 @@ io.on('connection', (socket) => {
   // Agent connection
   socket.on('agent_register', (agentInfo) => {
     const agentId = agentInfo.agent_id;
-    console.log(`Agent connected via WebSocket: ${agentId}`);
+    console.log(`Agent connected via WebSocket: ${agentId} (${agentInfo.hostname})`);
     
     agentSockets.set(agentId, socket);
     
     // Zapisz info o agencie
     agents.set(agentId, {
       ...agentInfo,
+      transport: 'websocket',
       registered_at: new Date().toISOString(),
       last_heartbeat: new Date().toISOString(),
       status: 'online',
