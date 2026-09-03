@@ -3,82 +3,211 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Remote Control - Web Interface</title>
-    <link rel="stylesheet" href="styles.css">
+    <title>ZdanControl - Remote Control Interface</title>
+    <link rel="stylesheet" href="design-system.css">
+    <link rel="stylesheet" href="components.css">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>🖥️ Remote Control Interface</h1>
-            <div class="status-bar">
-                <span id="connection-status" class="status-badge disconnected">Rozłączony</span>
-                <span id="api-status" class="status-badge unknown">API: Nieznany</span>
+    <div class="app-shell">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-brand">
+                <div class="header-logo">Z</div>
+                <h1 class="header-title">ZdanControl</h1>
+            </div>
+            <div class="header-actions">
+                <div class="connection-indicator" id="connection-indicator">
+                    <div class="connection-dot"></div>
+                    <span id="connection-text">Rozłączony</span>
+                </div>
+                <button id="connect-btn" class="btn btn-primary btn-sm">
+                    Połącz
+                </button>
             </div>
         </header>
 
-        <main>
-            <div class="agents-section">
-                <div class="section-header">
-                    <h2>Dostępne komputery</h2>
-                    <button id="refresh-agents" class="btn btn-secondary">Odśwież</button>
-                </div>
-                <div id="agents-list" class="agents-list">
-                    <p class="text-muted">Ładowanie listy agentów...</p>
-                </div>
-            </div>
-
-            <div class="terminal-section">
-                <div class="terminal-header">
-                    <h2>Terminal</h2>
-                    <div class="terminal-controls">
-                        <button id="clear-terminal" class="btn btn-secondary">Wyczyść</button>
-                        <button id="connect-btn" class="btn btn-primary">Połącz</button>
-                    </div>
-                </div>
-                <div class="terminal-container">
-                    <div id="terminal" class="terminal"></div>
-                    <div class="terminal-input">
-                        <span class="prompt">$</span>
-                        <input type="text" id="command-input" placeholder="Wybierz agenta i wpisz komendę..." autocomplete="off" disabled>
-                    </div>
-                </div>
-            </div>
-
-            <div class="info-section">
-                <div class="info-card">
-                    <h3>Informacje o komputerze</h3>
-                    <div id="system-info">
-                        <p>Wybierz agenta z listy aby zobaczyć informacje</p>
-                    </div>
-                </div>
-
-                <div class="info-card">
-                    <h3>Szybkie akcje</h3>
-                    <div class="quick-actions">
-                        <button class="action-btn" data-command="dir">Wylistuj pliki</button>
-                        <button class="action-btn" data-command="ipconfig">Konfiguracja sieci</button>
-                        <button class="action-btn" data-command="systeminfo">Informacje systemu</button>
-                        <button class="action-btn" data-command="tasklist">Lista procesów</button>
-                    </div>
-                </div>
-
-                <div class="info-card">
-                    <h3>Zarządzanie portami</h3>
-                    <div class="port-management">
-                        <div class="port-input">
-                            <input type="number" id="port-number" placeholder="Numer portu" min="1" max="65535">
-                            <button id="open-port" class="btn btn-success">Otwórz</button>
-                            <button id="close-port" class="btn btn-danger">Zamknij</button>
+        <!-- Main Layout -->
+        <div class="main-layout">
+            <!-- Sidebar -->
+            <aside class="app-sidebar">
+                <div class="sidebar-section">
+                    <div class="sidebar-title">Komputery</div>
+                    <div id="agents-list" class="agent-list">
+                        <div class="empty-state">
+                            <div class="loading-skeleton" style="width: 100%; height: 60px;"></div>
                         </div>
                     </div>
                 </div>
-            </div>
-        </main>
+            </aside>
 
-        <footer>
-            <p>Remote Control Application - Homelab & Cybersecurity</p>
-        </footer>
+            <!-- Main Content -->
+            <main class="app-main">
+                <!-- Terminal Section -->
+                <section class="terminal-section">
+                    <div class="terminal-container">
+                        <div class="terminal-header">
+                            <div class="terminal-title">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M4 17l6-6-6-6M12 19h8"/>
+                                </svg>
+                                <span>Terminal</span>
+                                <span id="selected-agent-label" class="badge badge-primary" style="display: none;"></span>
+                            </div>
+                            <div class="terminal-controls">
+                                <button id="clear-terminal" class="btn btn-ghost btn-sm btn-icon" title="Wyczyść terminal">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div id="terminal" class="terminal-body">
+                            <div class="terminal-output terminal-info">Kliknij "Połącz" aby nawiązać połączenie z serwerem</div>
+                        </div>
+                        <div class="terminal-input-container">
+                            <span class="terminal-prompt">$</span>
+                            <input type="text" id="command-input" class="terminal-input" placeholder="Wybierz agenta i wpisz komendę..." autocomplete="off" disabled>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Info Grid -->
+                <div class="grid grid-2">
+                    <!-- System Info -->
+                    <section class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Informacje o systemie</h3>
+                        </div>
+                        <div class="card-body">
+                            <div id="system-info" class="system-info">
+                                <div class="empty-state">
+                                    <svg class="empty-state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                                        <line x1="8" y1="21" x2="16" y2="21"/>
+                                        <line x1="12" y1="17" x2="12" y2="21"/>
+                                    </svg>
+                                    <div class="empty-state-title">Nie wybrano agenta</div>
+                                    <div class="empty-state-description">Wybierz komputer z listy, aby zobaczyć szczegółowe informacje</div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Quick Actions -->
+                    <section class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Szybkie akcje</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="quick-actions">
+                                <div class="action-card" data-command="dir">
+                                    <svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+                                    </svg>
+                                    <div class="action-title">Wylistuj pliki</div>
+                                    <div class="action-description">dir</div>
+                                </div>
+                                <div class="action-card" data-command="ipconfig">
+                                    <svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
+                                        <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
+                                        <line x1="6" y1="6" x2="6.01" y2="6"/>
+                                        <line x1="6" y1="18" x2="6.01" y2="18"/>
+                                    </svg>
+                                    <div class="action-title">Konfiguracja sieci</div>
+                                    <div class="action-description">ipconfig</div>
+                                </div>
+                                <div class="action-card" data-command="systeminfo">
+                                    <svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="10"/>
+                                        <line x1="12" y1="16" x2="12" y2="12"/>
+                                        <line x1="12" y1="8" x2="12.01" y2="8"/>
+                                    </svg>
+                                    <div class="action-title">Informacje systemu</div>
+                                    <div class="action-description">systeminfo</div>
+                                </div>
+                                <div class="action-card" data-command="tasklist">
+                                    <svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+                                        <path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/>
+                                    </svg>
+                                    <div class="action-title">Lista procesów</div>
+                                    <div class="action-description">tasklist</div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- Port Management -->
+                <section class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Zarządzanie portami</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="port-form">
+                            <div class="port-input-group">
+                                <input type="number" id="port-number" class="input port-input" placeholder="Numer portu (1-65535)" min="1" max="65535">
+                                <div class="port-actions">
+                                    <button id="open-port" class="btn btn-success">Otwórz</button>
+                                    <button id="close-port" class="btn btn-danger">Zamknij</button>
+                                </div>
+                            </div>
+                            <p class="text-xs text-muted">Zarządzaj portami firewall na wybranym komputerze</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Keyboard Shortcuts -->
+                <section class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Skróty klawiszowe</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="keyboard-shortcuts">
+                            <div class="shortcut-item">
+                                <div class="shortcut-keys">
+                                    <span class="shortcut-key">Ctrl</span>
+                                    <span class="shortcut-key">K</span>
+                                </div>
+                                <div class="shortcut-description">Fokus na pole komendy</div>
+                            </div>
+                            <div class="shortcut-item">
+                                <div class="shortcut-keys">
+                                    <span class="shortcut-key">Ctrl</span>
+                                    <span class="shortcut-key">L</span>
+                                </div>
+                                <div class="shortcut-description">Wyczyść terminal</div>
+                            </div>
+                            <div class="shortcut-item">
+                                <div class="shortcut-keys">
+                                    <span class="shortcut-key">Ctrl</span>
+                                    <span class="shortcut-key">R</span>
+                                </div>
+                                <div class="shortcut-description">Odśwież listę agentów</div>
+                            </div>
+                            <div class="shortcut-item">
+                                <div class="shortcut-keys">
+                                    <span class="shortcut-key">Esc</span>
+                                </div>
+                                <div class="shortcut-description">Wyczyść pole komendy</div>
+                            </div>
+                            <div class="shortcut-item">
+                                <div class="shortcut-keys">
+                                    <span class="shortcut-key">↑</span>
+                                    <span class="shortcut-key">↓</span>
+                                </div>
+                                <div class="shortcut-description">Nawigacja w historii komend</div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
     </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script src="app.js"></script>
