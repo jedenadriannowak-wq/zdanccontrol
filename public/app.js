@@ -400,21 +400,40 @@ function executeCommand(command) {
     showToast('error', 'Błąd', 'Nie jesteś połączony lub nie wybrano agenta');
     return;
   }
-  
+
+  // Debug - wypisz co dokładnie jest w state
+  const rawAgentId = state.selectedAgent.agent_id;
+  const agentId = String(rawAgentId || '').trim();
+  console.log('[FRONTEND executeCommand] ***********************************');
+  console.log('  state.isConnected:', state.isConnected);
+  console.log('  state.selectedAgent:', state.selectedAgent);
+  console.log('  rawAgentId:', JSON.stringify(rawAgentId));
+  console.log('  sanitizedAgentId:', JSON.stringify(agentId));
+  console.log('  command:', command);
+  console.log('  state.agents.keys (', state.agents.size, '):', Array.from(state.agents.keys()));
+  console.log('*********************************************************');
+
+  if (!agentId) {
+    showToast('error', 'Błąd', 'Nie można wysłać komendy - puste agent_id');
+    return;
+  }
+
   // Add to history
   state.commandHistory.push(command);
   state.historyIndex = state.commandHistory.length;
-  
+
   // Display command in terminal
   addTerminalOutput(`$ ${command}`, 'command');
-  
+
   // Send command via WebSocket
   const commandId = `cmd_${state.commandIdCounter++}`;
-  state.socket.emit('execute_command', {
-    agent_id: state.selectedAgent.agent_id,
+  const payload = {
+    agent_id: agentId,
     command: command,
     command_id: commandId
-  });
+  };
+  console.log('[FRONTEND] Emituję execute_command z payloadem:', payload);
+  state.socket.emit('execute_command', payload);
 }
 
 function displayCommandOutput(data) {

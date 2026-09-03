@@ -285,23 +285,51 @@ io.on('connection', (socket) => {
   
   // Komenda do agenta
   socket.on('execute_command', (data) => {
-    const { agent_id, command, command_id } = data;
-    console.log(`Execute command on ${agent_id}: ${command} (ID: ${command_id})`);
+    const raw_agent_id = data && data.agent_id ? data.agent_id : '';
+    // Sanityzacja: przytnij białe znaki, zabezpiecz przed nullem
+    const agent_id = String(raw_agent_id).trim();
+    const command = data && data.command ? data.command : '';
+    const command_id = data && data.command_id ? data.command_id : 'cmd_' + Date.now();
+
+    console.log('==============================================');
+    console.log('[execute_command] Odebrano żądanie:');
+    console.log('  agent_id (raw):     ', JSON.stringify(raw_agent_id));
+    console.log('  agent_id (sanit.):  ', JSON.stringify(agent_id));
+    console.log('  command:            ', command.substring(0, 80));
+    console.log('  command_id:         ', command_id);
+    console.log('  agents.size:        ', agents.size);
+    console.log('  agentSockets.size:  ', agentSockets.size);
+    console.log('  Dostępni agenci w Map:');
+    for (const [id, ag] of agents.entries()) {
+      console.log('    -', JSON.stringify(id), '| status:', ag.status, '| host:', ag.hostname, '| hasSocket:', agentSockets.has(id));
+    }
+    console.log('  agents.has("' + agent_id + '"):  ', agents.has(agent_id));
+    console.log('  agentSockets.has("' + agent_id + '"): ', agentSockets.has(agent_id));
+    console.log('==============================================');
+
+    if (!agent_id) {
+      socket.emit('error', { message: 'Brak agent_id w żądaniu' });
+      return;
+    }
 
     const agentSocket = agentSockets.get(agent_id);
     if (agentSocket) {
-      // Agent połączony przez WebSocket - wyślij bezpośrednio
       agentSocket.emit('execute_command', { command, command_id });
       socket.emit('command_queued', { command_id, transport: 'websocket' });
+      console.log('[execute_command] ✅ Wysłano WebSocketem do ' + agent_id);
     } else if (agents.has(agent_id)) {
-      // Agent połączony przez HTTP polling - dodaj do kolejki
       const queue = pendingCommands.get(agent_id) || [];
       queue.push({ command_id, command, created_at: new Date().toISOString() });
       pendingCommands.set(agent_id, queue);
-      console.log(`[HTTP Queue] Dodano komendę ${command_id} do kolejki agenta ${agent_id}. Oczekujących: ${queue.length}`);
+      console.log(`[execute_command] ✅ Dodano do HTTP kolejki agenta ${agent_id} (rozmiar: ${queue.length})`);
       socket.emit('command_queued', { command_id, transport: 'http_polling' });
     } else {
-      socket.emit('error', { message: 'Agent not connected or not found' });
+      const available = Array.from(agents.keys()).join(', ') || '(BRAK)';
+      const errMsg = `Agent "${agent_id}" nie został znaleziony. Dostępni agenci: [${available}]. ` +
+        `UWAGA: Czy na pewno zrestartowałeś "node server.js" PO moich poprawkach? ` +
+        `Czy agent zarejestrował się na TYM SAMYM serwerze?`;
+      console.error('[execute_command] ❌ BŁĄD: ' + errMsg);
+      socket.emit('error', { message: errMsg, debug: { requested: agent_id, available: Array.from(agents.keys()) } });
     }
   });
   
