@@ -193,11 +193,28 @@ function initializeSocket() {
   state.socket.on('command_result', (data) => {
     displayCommandOutput(data);
   });
-  
+
+  // Command queued (for HTTP polling agents - no WebSocket, will be picked up in ~5s)
+  state.socket.on('command_queued', (data) => {
+    const transportText = data.transport === 'http_polling'
+      ? 'dodana do kolejki (agent HTTP - zostanie odebrana za ~5s)'
+      : 'wysłana bezpośrednio przez WebSocket';
+    showToast('info', 'Komenda ' + transportText, `ID: ${data.command_id}`);
+    addTerminalOutput(`[System] Komenda ${transportText}`, 'info');
+  });
+
   // Error
   state.socket.on('error', (error) => {
     console.error('Socket error:', error);
-    showToast('error', 'Błąd', error.message || error);
+    let msg = error.message || error || 'Nieznany błąd';
+    if (msg === 'Agent not connected or not found' || msg === 'Agent not connected') {
+      msg = 'Agent nie jest połączony (lub nie istnieje). Sprawdź czy: ' +
+        '1) agent działa (zobacz Task Manager → powershell.exe z dużym zużyciem CPU co 5s) ' +
+        '2) na serwerze jest ZRESTARTOWANY server.js z NOWYM KODEM ' +
+        '3) wpisałeś poprawne URL serwera w agencie';
+    }
+    showToast('error', 'Błąd', msg);
+    addTerminalOutput('[ERROR] ' + msg, 'error');
   });
 }
 
